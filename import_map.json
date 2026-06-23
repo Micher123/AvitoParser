@@ -1,0 +1,13 @@
+{
+  "imports": {
+    "yaml": "npm:yaml@2.8.0",
+    "dom-parser": "jsr:@b-fuze/deno-dom@0.1.52",
+    "@std/path": "jsr:@std/path@^1.1.1",
+    "@std/fs": "jsr:@std/fs@^1.0.19",
+    "@std/async": "jsr:@std/async@^1.0.13",
+    "#env": "./src/core/env.ts",
+    "#config": "./src/core/config.ts",
+    "#logger": "./src/core/logger.ts",
+    "#utils/": "./src/utils/"
+  }
+}

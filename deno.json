@@ -1,0 +1,7 @@
+{
+  "tasks": {
+    "parse-avito": "deno run --allow-all ./src/parsers/avito-csv.ts",
+    "parse-cian": "deno run --allow-all --env-file=.env ./src/parsers/cian-csv.ts"
+  },
+  "importMap": "./import_map.json"
+}

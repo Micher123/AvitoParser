@@ -21,38 +21,243 @@ function toCsvLine(values: unknown[]): string {
   return values.map(escapeCsvValue).join(";") + "\n";
 }
 
-/** Интерфейс одной записи объявления для CSV */
+/** Полный набор полей объявления (45 полей) */
 export interface ListingRecord {
-  source: "avito" | "cian";
-  url: string;
+  // Основные
+  item_id: string;
+  site_name: "avito" | "cian";
   title: string;
-  address: string;
+  price: string;
+  price_per_m2: string;
   description: string;
-  price?: string;
-  rating: string;
-  operators: string;
-  routes: string;
-  images: string;
-  lat: number;
-  lon: number;
-  parsedAt: string;
+  description_html: string;
+  address: string;
+
+  // Параметры квартиры
+  rooms: string;
+  total_area: string;
+  kitchen_area: string;
+  living_area: string;
+  floor: string;
+  floors_total: string;
+  balcony: string;
+  room_type: string;
+  bathroom: string;
+  windows: string;
+  renovation: string;
+  furniture: string;
+  is_furnished: string; // "да"/"нет"
+
+  // Тип дома / постройка
+  house_type: string;
+  build_year: string;
+  passenger_elevator: string;
+  freight_elevator: string;
+
+  // Парковка
+  parking: string;
+
+  // Продавец
+  seller_name: string;
+  seller_type: string;
+  seller_contact_person: string;
+  is_agency: string; // "да"/"нет"
+  phone_number: string;
+  messenger_availability: string; // "да"/"нет"
+
+  // Сделка
+  sale_method: string;
+  sale_terms: string;
+
+  // Ипотека
+  is_mortgage_possible: string; // "да"/"нет"
+  mortgage_payment: string;
+  mortgage_rate: string;
+  mortgage_income: string;
+
+  // Статистика
+  listing_date: string;
+  views_total: string;
+  views_today: string;
+
+  // Изображения
+  images_count: string;
+  image_urls: string;
+  main_image_url: string;
+
+  // Гео
+  latitude: string;
+  longitude: string;
+  map_zoom: string;
+
+  // Онлайн-показ
+  is_online_view: string; // "да"/"нет"
+
+  // Мета
+  parsed_at: string;
 }
 
-const CSV_HEADERS = [
-  "source",
-  "url",
-  "title",
-  "address",
-  "description",
-  "price",
-  "rating",
-  "operators",
-  "routes",
-  "images",
-  "lat",
-  "lon",
-  "parsedAt",
+export const CSV_HEADERS = [
+  "ID объявления",
+  "Сайт",
+  "Заголовок объявления",
+  "Цена",
+  "Цена за м²",
+  "Описание",
+  "Описание (HTML)",
+  "Адрес",
+  "Количество комнат",
+  "Общая площадь",
+  "Площадь кухни",
+  "Жилая площадь",
+  "Этаж",
+  "Этажей в доме",
+  "Балкон или лоджия",
+  "Тип комнат",
+  "Санузел",
+  "Окна",
+  "Ремонт",
+  "Мебель",
+  "Есть ли мебель",
+  "Тип дома",
+  "Год постройки",
+  "Пассажирский лифт",
+  "Грузовой лифт",
+  "Парковка",
+  "Имя продавца",
+  "Тип продавца",
+  "Контактное лицо",
+  "Является ли объявление от агентства",
+  "Телефон",
+  "Доступность мессенджера",
+  "Способ продажи",
+  "Условия продажи",
+  "Возможна ли ипотека",
+  "Платёж по ипотеке (от)",
+  "Ставка по ипотеке (от)",
+  "Требуемый доход (от)",
+  "Дата размещения",
+  "Всего просмотров",
+  "Просмотров сегодня",
+  "Количество изображений",
+  "Ссылки на все изображения",
+  "URL главного изображения",
+  "Широта (геоданные)",
+  "Долгота (геоданные)",
+  "Масштаб карты",
+  "Доступен ли онлайн-показ",
+  "Дата парсинга",
 ];
+
+/** Порядок полей для записи (соответствует CSV_HEADERS) */
+function recordToValues(r: ListingRecord): unknown[] {
+  return [
+    r.item_id,
+    r.site_name,
+    r.title,
+    r.price,
+    r.price_per_m2,
+    r.description,
+    r.description_html,
+    r.address,
+    r.rooms,
+    r.total_area,
+    r.kitchen_area,
+    r.living_area,
+    r.floor,
+    r.floors_total,
+    r.balcony,
+    r.room_type,
+    r.bathroom,
+    r.windows,
+    r.renovation,
+    r.furniture,
+    r.is_furnished,
+    r.house_type,
+    r.build_year,
+    r.passenger_elevator,
+    r.freight_elevator,
+    r.parking,
+    r.seller_name,
+    r.seller_type,
+    r.seller_contact_person,
+    r.is_agency,
+    r.phone_number,
+    r.messenger_availability,
+    r.sale_method,
+    r.sale_terms,
+    r.is_mortgage_possible,
+    r.mortgage_payment,
+    r.mortgage_rate,
+    r.mortgage_income,
+    r.listing_date,
+    r.views_total,
+    r.views_today,
+    r.images_count,
+    r.image_urls,
+    r.main_image_url,
+    r.latitude,
+    r.longitude,
+    r.map_zoom,
+    r.is_online_view,
+    r.parsed_at,
+  ];
+}
+
+/** Создаёт пустую запись с site_name */
+export function emptyRecord(site_name: "avito" | "cian"): ListingRecord {
+  return {
+    item_id: "",
+    site_name,
+    title: "",
+    price: "",
+    price_per_m2: "",
+    description: "",
+    description_html: "",
+    address: "",
+    rooms: "",
+    total_area: "",
+    kitchen_area: "",
+    living_area: "",
+    floor: "",
+    floors_total: "",
+    balcony: "",
+    room_type: "",
+    bathroom: "",
+    windows: "",
+    renovation: "",
+    furniture: "",
+    is_furnished: "",
+    house_type: "",
+    build_year: "",
+    passenger_elevator: "",
+    freight_elevator: "",
+    parking: "",
+    seller_name: "",
+    seller_type: "",
+    seller_contact_person: "",
+    is_agency: "",
+    phone_number: "",
+    messenger_availability: "",
+    sale_method: "",
+    sale_terms: "",
+    is_mortgage_possible: "",
+    mortgage_payment: "",
+    mortgage_rate: "",
+    mortgage_income: "",
+    listing_date: "",
+    views_total: "",
+    views_today: "",
+    images_count: "",
+    image_urls: "",
+    main_image_url: "",
+    latitude: "",
+    longitude: "",
+    map_zoom: "",
+    is_online_view: "",
+    parsed_at: new Date().toISOString(),
+  };
+}
 
 /**
  * Записывает массив объявлений в CSV-файл.
@@ -78,21 +283,7 @@ export async function appendToCsv(filename: string, records: ListingRecord[]): P
   }
 
   for (const record of records) {
-    lines.push(toCsvLine([
-      record.source,
-      record.url,
-      record.title,
-      record.address,
-      record.description,
-      record.price ?? "",
-      record.rating,
-      record.operators,
-      record.routes,
-      record.images,
-      record.lat,
-      record.lon,
-      record.parsedAt,
-    ]));
+    lines.push(toCsvLine(recordToValues(record)));
   }
 
   await Deno.writeTextFile(filepath, lines.join(""), { append: fileExists, create: true });

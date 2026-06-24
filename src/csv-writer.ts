@@ -21,11 +21,12 @@ function toCsvLine(values: unknown[]): string {
   return values.map(escapeCsvValue).join(";") + "\n";
 }
 
-/** Полный набор полей объявления (45 полей) */
+/** Полный набор полей объявления */
 export interface ListingRecord {
   // Основные
   item_id: string;
   site_name: "avito" | "cian";
+  url: string;
   title: string;
   price: string;
   price_per_m2: string;
@@ -62,6 +63,11 @@ export interface ListingRecord {
   seller_type: string;
   seller_contact_person: string;
   is_agency: string; // "да"/"нет"
+  seller_id: string;
+  seller_link: string;
+  seller_avatar: string;
+  is_active: string; // "да"/"нет"
+  is_favorite: string; // "да"/"нет"
   phone_number: string;
   messenger_availability: string; // "да"/"нет"
 
@@ -89,9 +95,24 @@ export interface ListingRecord {
   latitude: string;
   longitude: string;
   map_zoom: string;
+  geo_references: string;
 
   // Онлайн-показ
   is_online_view: string; // "да"/"нет"
+
+  // Хлебные крошки / SEO
+  breadcrumbs: string;
+  seo_tags: string;
+  usps: string;
+
+  // Застройщик
+  developer_description: string;
+  developer_items: string;
+  developer_trust: string;
+
+  // Все параметры скопом
+  all_params: string;
+  all_house_params: string;
 
   // Мета
   parsed_at: string;
@@ -100,6 +121,7 @@ export interface ListingRecord {
 export const CSV_HEADERS = [
   "ID объявления",
   "Сайт",
+  "URL",
   "Заголовок объявления",
   "Цена",
   "Цена за м²",
@@ -128,6 +150,11 @@ export const CSV_HEADERS = [
   "Тип продавца",
   "Контактное лицо",
   "Является ли объявление от агентства",
+  "ID продавца",
+  "Ссылка на профиль продавца",
+  "Аватар продавца",
+  "Объявление активно",
+  "В избранном",
   "Телефон",
   "Доступность мессенджера",
   "Способ продажи",
@@ -145,7 +172,16 @@ export const CSV_HEADERS = [
   "Широта (геоданные)",
   "Долгота (геоданные)",
   "Масштаб карты",
-  "Доступен ли онлайн-показ",
+  "Гео-объекты",
+  "Онлайн-показ",
+  "Хлебные крошки",
+  "SEO теги",
+  "Преимущества (USP)",
+  "Описание застройщика",
+  "Параметры застройщика",
+  "Trust-карточка застройщика",
+  "Все параметры квартиры",
+  "Все параметры дома",
   "Дата парсинга",
 ];
 
@@ -154,6 +190,7 @@ function recordToValues(r: ListingRecord): unknown[] {
   return [
     r.item_id,
     r.site_name,
+    r.url,
     r.title,
     r.price,
     r.price_per_m2,
@@ -182,6 +219,11 @@ function recordToValues(r: ListingRecord): unknown[] {
     r.seller_type,
     r.seller_contact_person,
     r.is_agency,
+    r.seller_id,
+    r.seller_link,
+    r.seller_avatar,
+    r.is_active,
+    r.is_favorite,
     r.phone_number,
     r.messenger_availability,
     r.sale_method,
@@ -199,7 +241,16 @@ function recordToValues(r: ListingRecord): unknown[] {
     r.latitude,
     r.longitude,
     r.map_zoom,
+    r.geo_references,
     r.is_online_view,
+    r.breadcrumbs,
+    r.seo_tags,
+    r.usps,
+    r.developer_description,
+    r.developer_items,
+    r.developer_trust,
+    r.all_params,
+    r.all_house_params,
     r.parsed_at,
   ];
 }
@@ -209,6 +260,7 @@ export function emptyRecord(site_name: "avito" | "cian"): ListingRecord {
   return {
     item_id: "",
     site_name,
+    url: "",
     title: "",
     price: "",
     price_per_m2: "",
@@ -237,6 +289,11 @@ export function emptyRecord(site_name: "avito" | "cian"): ListingRecord {
     seller_type: "",
     seller_contact_person: "",
     is_agency: "",
+    seller_id: "",
+    seller_link: "",
+    seller_avatar: "",
+    is_active: "",
+    is_favorite: "",
     phone_number: "",
     messenger_availability: "",
     sale_method: "",
@@ -254,7 +311,16 @@ export function emptyRecord(site_name: "avito" | "cian"): ListingRecord {
     latitude: "",
     longitude: "",
     map_zoom: "",
+    geo_references: "",
     is_online_view: "",
+    breadcrumbs: "",
+    seo_tags: "",
+    usps: "",
+    developer_description: "",
+    developer_items: "",
+    developer_trust: "",
+    all_params: "",
+    all_house_params: "",
     parsed_at: new Date().toISOString(),
   };
 }

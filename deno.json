@@ -1,7 +1,0 @@
-{
-  "tasks": {
-    "parse": "deno run --allow-all ./src/parsers/avito-csv.ts",
-    "parse-avito": "deno run --allow-all ./src/parsers/avito-csv.ts"
-  },
-  "importMap": "./import_map.json"
-}

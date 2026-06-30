@@ -363,36 +363,26 @@ def parse_ad_page(filepath: str, ad_url: str) -> ListingRecord:
             addr_span = addr_container.find("span")
         record.address = safe_text(addr_span)
 
-    # ── 5. Метро (как список словарей) ──
+    # ── 5. Метро (читаемый формат: "Станция:время, Станция:время, ...") ──
     metro_spans = soup.select("span._22d8cf68e753a9b9")
-    metro_list: List[Dict[str, str]] = []
+    metro_parts: List[str] = []
     for span in metro_spans:
-        # Название станции — первый span внутри
-        name_el = span.find("span")
-        name = safe_text(name_el)
+        # Название станции — второй span (первый — иконка цвета, без текста)
+        child_spans = span.find_all("span", recursive=False)
+        name = safe_text(child_spans[1]) if len(child_spans) >= 2 else ""
 
-        # Цвет линии — ищем в style любого span
-        line_color = ""
-        all_spans = span.find_all("span")
-        for s in all_spans:
-            style = safe_attr(s, "style")
-            if "background-color" in style:
-                color_match = re.search(r"background-color:\s*([#\w]+)", style)
-                if color_match:
-                    line_color = color_match.group(1)
-                    break
-
-        # Время пешком
+        # Время пешком — span с классом _975960bc91729d0a
         time_el = span.select_one("span._975960bc91729d0a")
         walking_time = safe_text(time_el)
 
-        metro_list.append({
-            "name": name,
-            "line_color": line_color,
-            "walking_time": walking_time,
-        })
+        if name and walking_time:
+            metro_parts.append(f"{name}:{walking_time}")
+        elif name:
+            metro_parts.append(name)
+        elif walking_time:
+            metro_parts.append(walking_time)
 
-    record.metro = json.dumps(metro_list, ensure_ascii=False)
+    record.metro = ", ".join(metro_parts)
 
     # ── 6. Описание ──
     desc_el = soup.select_one('div[data-marker="item-view/item-description"]')

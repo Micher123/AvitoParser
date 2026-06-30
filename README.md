@@ -54,7 +54,7 @@ AVITO_PROXY=
 
 ### 3. Подготовьте куки (опционально, но рекомендуется)
 
-Без кук Avito может показывать капчу. Экспортируйте ([описание](docs/cookies_export/COOKIE_EXPORT.md)) куки из браузера в файл `cookies.json`:
+Без кук Avito может показывать капчу. Экспортируйте ([описание](docs/cookies_export/COOKIES_EXPORT.md)) куки из браузера в файл `cookies.json`:
 
 ```json
 {

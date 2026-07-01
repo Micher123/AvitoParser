@@ -12,6 +12,8 @@ env/
 # ── Локальные настройки ──
 .env
 !.env.example
+clients/*/Pages/
+server/data/
 
 # ── Куки (личные данные) ──
 cookies.json
@@ -19,6 +21,7 @@ cookies.json
 # ── Результаты парсинга ──
 output/
 *.csv
+*.tsv
 
 # ── Временные HTML-страницы ──
 Pages/

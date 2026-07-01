@@ -1,4 +1,4 @@
-# Порядок экспорта cookies из браузера (при помощи расширения "Cookie Manager" [установка](../browsers/extensions/COOKIE_MANAGER.md))
+# Порядок экспорта cookies из браузера (при помощи расширения ["Cookie Manager"](../browsers/extensions/COOKIE_MANAGER.md))
 
 # 1. В правом верхнем углу браузера нажать на иконку расширений (пазл):
 ![Иконка расширений в Mozila](../images/cookies_export/extensions.png)
@@ -18,6 +18,8 @@
 # 10. После появится окно с настройками экспорта: 
 ![Настройка формата экспорта](../images/cookies_export/export.png)
 # в котором нужно выбрать:
-    * JSON.
-    * Export as file.
+```
+     JSON.
+     Export as file.
+```
 # Далее, нажать на кнопку "Export" в левом нижнем углу. После чего скачанный файл cookies.json скопировать в корень проекта.

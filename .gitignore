@@ -1,1 +1,31 @@
-./Pages
+# ── Python ──
+__pycache__/
+*.pyc
+*.pyo
+
+# ── Виртуальное окружение ──
+.venv/
+venv/
+env/
+
+# ── Локальные настройки ──
+.env
+!.env.example
+
+# ── Куки (личные данные) ──
+cookies.json
+
+# ── Результаты парсинга ──
+output/
+*.csv
+
+# ── Временные HTML-страницы ──
+Pages/
+*.html
+
+# ── IDE ──
+.vscode/
+.idea/
+*.swp
+*.swo
+*~

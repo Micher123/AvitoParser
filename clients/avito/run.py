@@ -29,7 +29,6 @@ sys.path.insert(0, _PROJECT_ROOT)
 from bs4 import BeautifulSoup, Tag
 from dotenv import load_dotenv
 
-from csv_writer import ListingRecord, empty_record, OUTPUT_DIR
 from core.env import AVITO_COOKIES_FILE, AVITO_COOKIE, AVITO_PROXY
 from utils.cookies_parser import (
     parse_cookies_file,
@@ -109,36 +108,76 @@ def prepare_proxies() -> Optional[Dict[str, str]]:
 
 def download_search_page(url: str, headers: Dict[str, str], proxies: Optional[Dict[str, str]], page_num: int) -> Optional[str]:
     """Скачивает поисковую страницу Avito."""
-    os.makedirs(PAGES_DIR, exist_ok=True)
-    filepath = os.path.join(PAGES_DIR, f"search_page_{page_num:04d}.html")
+    try:
+        fetch_options: Dict[str, Any] = {
+            "headers": headers,
+            "timeout": 30,
+        }
+        if proxies:
+            fetch_options["proxies"] = proxies
 
-    if os.path.isfile(filepath):
-        print(f"[Avito] Файл уже существует: {filepath}")
-        with open(filepath, "r", encoding="utf-8") as f:
-            return f.read()
+        resp = spy_fetch(url, fetch_options)
+        if not resp.ok:
+            print(f"[Avito] Ошибка загрузки страницы: HTTP {resp.status_code}")
+            return None
 
-    resp = spy_fetch(url, headers=headers, proxies=proxies, timeout=30)
-    if not resp or not resp.get("ok"):
-        print(f"[Avito] Ошибка загрузки страницы: {resp.get('error', '') if resp else 'нет ответа'}")
+        return resp.text
+    except Exception as err:
+        print(f"[Avito] Ошибка загрузки страницы: {err}")
         return None
 
-    html = resp.get("text", "")
-    with open(filepath, "w", encoding="utf-8") as f:
-        f.write(html)
-    print(f"[Avito] Сохранена страница: {filepath}")
-    return html
 
-
-def extract_ad_links(html: str) -> List[str]:
+def extract_ad_links(html: str, search_url: str = "") -> List[str]:
     """Извлекает ссылки на объявления из поисковой страницы."""
     soup = BeautifulSoup(html, "lxml")
-    links = []
-    for a in soup.select('a[data-marker="item-title"]'):
+    links: List[str] = []
+
+    # Проверяем, не пришла ли страница с капчей / логином
+    page_text = soup.get_text()[:2000].lower()
+    if "капча" in page_text or "captcha" in page_text:
+        print("[Avito] ⚠ Обнаружена капча. Нужны актуальные куки.")
+
+    if "вход" in page_text and "пароль" in page_text:
+        print("[Avito] ⚠ Страница логина. Куки устарели.")
+
+    # Проверяем, что мы на Avito, а не на другом сайте
+    parsed = urlparse(search_url) if search_url else None
+    is_avito = parsed and "avito.ru" in parsed.netloc if parsed else False
+    if search_url and not is_avito:
+        print(f"[Avito] ⚠ URL не принадлежит Avito: {search_url}")
+        print("[Avito] Проверьте AVITO_SEARCH_URL в .env")
+        return links
+
+    # Способ 1: a[data-marker="item-title"]
+    title_links = soup.select('a[data-marker="item-title"]')
+    for a in title_links:
         href = safe_attr(a, "href")
         if href and "/" in href:
             full_url = urljoin("https://www.avito.ru", href)
-            if full_url not in links:
-                links.append(full_url)
+            links.append(full_url)
+
+    # Способ 2: запасной — div[data-marker="item"] → data-item-id
+    if not links:
+        items = soup.select('div[data-marker="item"]')
+        for item in items:
+            item_id = safe_attr(item, "data-item-id")
+            if item_id:
+                links.append(f"https://www.avito.ru/_/{item_id}")
+
+    # Диагностика
+    if not links:
+        print("[Avito] Селекторы не нашли объявлений. Пробую найти data-marker атрибуты:")
+        markers = set()
+        for el in soup.select('[data-marker]'):
+            val = el.get("data-marker", "")
+            if val:
+                markers.add(val)
+        if markers:
+            print(f"  Найдены data-marker: {sorted(markers)[:20]}")
+        else:
+            title = soup.find("title")
+            print(f"  <title>: {safe_text(title)[:100] if title else 'нет'}")
+
     return links
 
 
@@ -148,15 +187,26 @@ def download_ad_page(ad_url: str, headers: Dict[str, str], proxies: Optional[Dic
     filename = re.sub(r'[^\w\-_\.]', '_', ad_url.split("/")[-1] or "ad") + ".html"
     filepath = os.path.join(PAGES_DIR, filename)
 
-    resp = spy_fetch(ad_url, headers=headers, proxies=proxies, timeout=30)
-    if not resp or not resp.get("ok"):
-        print(f"  Ошибка загрузки объявления: {resp.get('error', '') if resp else 'нет ответа'}")
-        return None
+    try:
+        fetch_options: Dict[str, Any] = {
+            "headers": headers,
+            "timeout": 30,
+        }
+        if proxies:
+            fetch_options["proxies"] = proxies
 
-    html = resp.get("text", "")
-    with open(filepath, "w", encoding="utf-8") as f:
-        f.write(html)
-    return filepath
+        resp = spy_fetch(ad_url, fetch_options)
+        if not resp.ok:
+            print(f"  Ошибка загрузки объявления: HTTP {resp.status_code}")
+            return None
+
+        html = resp.text
+        with open(filepath, "w", encoding="utf-8") as f:
+            f.write(html)
+        return filepath
+    except Exception as err:
+        print(f"  Ошибка загрузки объявления: {err}")
+        return None
 
 
 def extract_next_page_url(html: str, current_url: str) -> Optional[str]:
@@ -220,9 +270,13 @@ def parse_ad_page(filepath: str, ad_url: str) -> Dict[str, str]:
     soup = BeautifulSoup(html, "lxml")
     record: Dict[str, str] = {}
 
-    # ID из URL
-    m = re.search(r'/(\d+)(?:_|$)', ad_url)
-    record["item_id"] = m.group(1) if m else ""
+    # ID из URL (несколько вариантов)
+    m = re.search(r'_(\d{7,12})(?:\?|$|_)', ad_url)  # avito.ru/..._1234567890
+    if not m:
+        m = re.search(r'/(\d{7,12})(?:/|$|\?|#)', ad_url)  # avito.ru/.../1234567890
+    if not m:
+        m = re.search(r'/(\d+)(?:_|$)', ad_url)
+    record["item_id"] = m.group(1) if m else str(hash(ad_url) & 0x7fffffff)
     record["url"] = ad_url
     record["parsed_at"] = datetime.now(timezone.utc).isoformat()
 
@@ -240,9 +294,26 @@ def parse_ad_page(filepath: str, ad_url: str) -> Dict[str, str]:
     price_per_m2_text = safe_text(price_per_m2_el)
     record["price_per_m2"] = re.sub(r'[^\d]', '', price_per_m2_text)
 
-    # Адрес
+    # Адрес (несколько резервных селекторов)
     addr_el = soup.select_one('span[data-marker="item-view/item-address"]')
+    if not addr_el:
+        addr_el = soup.select_one('span[class*="address"]') or soup.select_one('div[class*="address"]')
+    if not addr_el:
+        addr_el = soup.select_one('[itemprop="address"]') or soup.select_one('.item-address__string')
+    if not addr_el:
+        # Пробуем найти любой элемент содержащий "Москва" или "Санкт-Петербург"
+        for el in soup.select('span, div, p'):
+            text = safe_text(el)
+            if any(city in text for city in ['Москва', 'Санкт-Петербург', 'мкр', 'район', 'ул.', 'улица', 'проспект', 'шоссе']):
+                addr_el = el
+                break
     record["address"] = safe_text(addr_el)
+    if not record["address"]:
+        # Последний fallback: можно спарсить из breadcrumbs
+        bc = soup.select_one('div[class*="breadcrumbs"]') or soup.select_one('nav[aria-label="breadcrumbs"]')
+        if bc:
+            parts = [safe_text(a) for a in bc.select('a, span') if safe_text(a)]
+            record["address"] = ', '.join(parts) if parts else ""
 
     # Метро
     metro_spans = soup.select('span._22d8cf68e753a9b9')
@@ -372,7 +443,7 @@ def main():
             break
 
         # Шаг 2: Извлекаем ссылки на объявления
-        ad_links = extract_ad_links(html)
+        ad_links = extract_ad_links(html, current_url)
         print(f"[Avito] Найдено объявлений: {len(ad_links)}")
 
         new_links = [url for url in ad_links if url not in processed_urls]

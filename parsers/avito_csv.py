@@ -548,7 +548,7 @@ def main() -> None:
 
     if not search_url:
         print("[Avito] Укажите URL поиска первым аргументом или AVITO_SEARCH_URL в .env")
-        print("[Avito] Пример: ./parse.sh 'https://www.avito.ru/moskva/kvartiry/prodam'")
+        print("[Avito] Пример: ./deploy.sh --client --avito 'https://www.avito.ru/moskva/kvartiry/prodam'")
         return
 
     max_pages_str = os.getenv("AVITO_MAX_PAGES", "0")

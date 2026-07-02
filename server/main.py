@@ -2,12 +2,15 @@
 Сервер-аккумулятор AvitoParser.
 
 Принимает данные от клиентов-парсеров (Авито, Циан, Яндекс.Карты, Росреестр),
-сопоставляет их по адресу, смерживает в единую запись и экспортирует в TSV.
+сопоставляет их по адресу, смерживает в единую запись и хранит в PostgreSQL.
+
+При запуске:
+    - Создаёт БД PostgreSQL (если её ещё нет)
+    - Создаёт таблицы (если их ещё нет)
 
 Запуск:
-    python -m uvicorn server.main:app --host 0.0.0.0 --port 8000 --reload
-
-    или просто:
+    ./deploy.sh --server
+    или:
     python server/main.py
 """
 
@@ -22,8 +25,33 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from typing import List, Dict, Any, Optional
+from dotenv import load_dotenv
 
-from server.models import register_client, ingest, export_tsv, merge_to_unified
+# Загружаем .env ДО импорта моделей
+load_dotenv()
+
+from server.models import (
+    register_client,
+    ingest,
+    export_tsv,
+    merge_to_unified,
+    create_database,
+    init_tables,
+)
+
+# ── Автоинициализация БД при старте ────────────────────────────────
+
+print("[server] Проверяю БД...")
+created = create_database()
+if created:
+    print(f"[server] ✔ БД создана")
+else:
+    print("[server] БД уже существует")
+
+init_tables()
+print("[server] ✔ Таблицы готовы")
+
+# ── FastAPI ────────────────────────────────────────────────────────
 
 app = FastAPI(
     title="AvitoParser Server",
@@ -32,7 +60,7 @@ app = FastAPI(
 )
 
 
-# ── Схемы запросов / ответов ────────────────────────────────────
+# ── Схемы запросов / ответов ──────────────────────────────────────
 
 class RegisterRequest(BaseModel):
     client_id: str
@@ -70,7 +98,7 @@ class StatsResponse(BaseModel):
     total: int
 
 
-# ── Эндпоинты ────────────────────────────────────────────────────
+# ── Эндпоинты ──────────────────────────────────────────────────────
 
 @app.get("/")
 def root():
@@ -89,6 +117,7 @@ def ingest_data(req: IngestRequest):
     """
     Приём спаршенных данных от клиента.
     Каждая запись сопоставляется с существующими по адресу.
+    Данные сохраняются в PostgreSQL.
     """
     records_dict = [r.model_dump() for r in req.records]
     stats = ingest(req.client_id, records_dict)
@@ -101,7 +130,7 @@ def ingest_data(req: IngestRequest):
 
 @app.get("/export")
 def export():
-    """Экспорт смерженных данных в TSV."""
+    """Экспорт смерженных данных в TSV (разделитель — табуляция)."""
     path = export_tsv()
     return {"status": "ok", "file": path, "rows": len(merge_to_unified())}
 
@@ -117,12 +146,22 @@ def get_data():
 def list_clients():
     """Список зарегистрированных клиентов."""
     from server.models import get_db
-    db = get_db()
-    rows = db.execute("SELECT client_id, client_type, registered_at, last_seen_at FROM clients ORDER BY client_id").fetchall()
-    db.close()
+    conn = get_db()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT client_id, client_type, registered_at, last_seen_at FROM clients ORDER BY client_id"
+            )
+            rows = cur.fetchall()
+    finally:
+        conn.close()
     return [
-        {"client_id": r["client_id"], "client_type": r["client_type"],
-         "registered_at": r["registered_at"], "last_seen_at": r["last_seen_at"]}
+        {
+            "client_id": r["client_id"],
+            "client_type": r["client_type"],
+            "registered_at": str(r["registered_at"]),
+            "last_seen_at": str(r["last_seen_at"]),
+        }
         for r in rows
     ]
 
@@ -132,7 +171,7 @@ def health():
     return {"status": "healthy"}
 
 
-# ── Точка входа ──────────────────────────────────────────────────
+# ── Точка входа ────────────────────────────────────────────────────
 
 if __name__ == "__main__":
     import uvicorn

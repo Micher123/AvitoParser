@@ -357,8 +357,6 @@ def merge_to_unified() -> List[Dict[str, str]]:
                     "listing_date": "",
                     "views_total": "",
                     "views_today": "",
-                    "seller_name": "",
-                    "seller_type": "",
                     "flat_params": "",
                     "house_params": "",
                     "rosreestr": "",
@@ -427,8 +425,6 @@ TSV_HEADERS = [
     "Дата публикации",
     "Всего просмотров",
     "Просмотров сегодня",
-    "Имя продавца",
-    "Статус продавца",
     "Характеристики квартиры",
     "Характеристики дома",
     "Росреестр",
@@ -438,7 +434,7 @@ TSV_HEADERS = [
 TSV_FIELDS = [
     "item_id", "url", "title", "price", "price_per_m2",
     "address", "metro", "description", "listing_date",
-    "views_total", "views_today", "seller_name", "seller_type",
+    "views_total", "views_today",
     "flat_params", "house_params", "rosreestr", "source",
 ]
 

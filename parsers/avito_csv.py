@@ -478,25 +478,15 @@ def parse_ad_page(filepath: str, ad_url: str) -> ListingRecord:
         else:
             record.views_today = extract_number_int(text)
 
-    # ── 11. Имя продавца ──
-    seller_block = soup.select_one('[data-marker="seller-info"]')
-    if seller_block:
-        seller_name_el = seller_block.select_one("span._871bd196e38e7a53")
-        record.seller_name = safe_text(seller_name_el)
-
-    # ── 12. Статус продавца ──
-    seller_label_el = soup.select_one('div[data-marker="seller-info/label"]')
-    record.seller_type = safe_text(seller_label_el)
-
-    # ── 13. Характеристики квартиры ──
+    # ── 11. Характеристики квартиры ──
     flat_params = _parse_params_block(soup, "О квартире")
     record.flat_params = json.dumps(flat_params, ensure_ascii=False)
 
-    # ── 14. Характеристики дома ──
+    # ── 12. Характеристики дома ──
     house_params = _parse_params_block(soup, "О доме")
     record.house_params = json.dumps(house_params, ensure_ascii=False)
 
-    # ── 15. Росреестр ──
+    # ── 13. Росреестр ──
     rosreestr_items: List[str] = []
     domoteka_block = soup.select_one('div[data-marker="domoteka-entry-block"]')
     if domoteka_block:

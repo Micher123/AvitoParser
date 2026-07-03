@@ -79,8 +79,6 @@ class ListingRecord(BaseModel):
     listing_date: str = ""
     views_total: str = ""
     views_today: str = ""
-    seller_name: str = ""
-    seller_type: str = ""
     flat_params: str = ""
     house_params: str = ""
     rosreestr: str = ""

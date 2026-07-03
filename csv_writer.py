@@ -18,7 +18,6 @@ class ListingRecord:
         "item_id", "url", "title", "price", "price_per_m2",
         "address", "metro", "description",
         "listing_date", "views_total", "views_today",
-        "seller_name", "seller_type",
         "flat_params", "house_params", "rosreestr",
         "parsed_at",
     )
@@ -35,8 +34,6 @@ class ListingRecord:
         self.listing_date = ""
         self.views_total = ""
         self.views_today = ""
-        self.seller_name = ""
-        self.seller_type = ""
         self.flat_params = ""
         self.house_params = ""
         self.rosreestr = ""
@@ -55,8 +52,6 @@ CSV_HEADERS = [
     "Дата публикации",
     "Всего просмотров",
     "Просмотров сегодня",
-    "Имя продавца",
-    "Статус продавца",
     "Характеристики квартиры",
     "Характеристики дома",
     "Росреестр",
@@ -83,8 +78,6 @@ def record_to_values(r: ListingRecord) -> list:
         _clean(r.listing_date),
         _clean(r.views_total),
         _clean(r.views_today),
-        _clean(r.seller_name),
-        _clean(r.seller_type),
         _clean(r.flat_params),
         _clean(r.house_params),
         _clean(r.rosreestr),

@@ -134,8 +134,6 @@ if __name__ == "__main__":
             "listing_date": "2026-07-01",
             "views_total": "100",
             "views_today": "10",
-            "seller_name": "Иван",
-            "seller_type": "Частное лицо",
             "flat_params": '{"rooms": 3, "area": 50}',
             "house_params": '{"floors": 9, "type": "кирпичный"}',
             "rosreestr": '{"owners": 1}',

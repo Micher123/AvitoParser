@@ -399,15 +399,6 @@ def parse_ad_page(filepath: str, ad_url: str) -> Dict[str, str]:
     views_today_el = soup.select_one('span[data-marker="item-view/today-views"]')
     record["views_today"] = safe_text(views_today_el)
 
-    # Продавец
-    seller_name_el = soup.select_one('span[data-marker="item-view/seller-name"]')
-    record["seller_name"] = safe_text(seller_name_el)
-    if not record["seller_name"]:
-        seller_link = soup.select_one('a[data-marker="item-view/seller-link"]')
-        record["seller_name"] = safe_text(seller_link)
-    seller_type_el = soup.select_one('div[data-marker="seller-type-label"] span')
-    record["seller_type"] = safe_text(seller_type_el)
-
     # Характеристики квартиры
     flat_params = {}
     for row in soup.select('li[data-marker="item-view/item-flat-params"]'):

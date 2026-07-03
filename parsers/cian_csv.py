@@ -114,8 +114,6 @@ def offer_to_record(offer: Dict[str, Any]) -> ListingRecord:
 
     # Seller
     seller = offer.get("seller") or {}
-    record.seller_name = s(seller.get("name"))
-    record.seller_type = s(seller.get("type"))
     record.seller_contact_person = s(seller.get("contactPerson"))
     record.is_agency = yn(seller.get("isAgency") if seller.get("isAgency") is not None
                           else not offer.get("isByHomeowner"))

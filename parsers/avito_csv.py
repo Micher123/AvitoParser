@@ -19,7 +19,7 @@ from urllib.parse import urljoin, urlparse, parse_qs, urlencode, urlunparse
 from bs4 import BeautifulSoup, Tag
 
 from csv_writer import ListingRecord, empty_record, append_to_csv, OUTPUT_DIR
-from core.env import AVITO_COOKIES_FILE, AVITO_COOKIE, AVITO_PROXY
+from core.env import AVITO_COOKIES_FILE, AVITO_COOKIE, AVITO_PROXY, HTTP_RETRY_DELAYS
 from utils.cookies_parser import (
     parse_cookies_file,
     merge_cookies,
@@ -33,6 +33,8 @@ _THIS_DIR = os.path.dirname(os.path.abspath(__file__))
 _ROOT_DIR = os.path.dirname(_THIS_DIR)
 PAGES_DIR = os.path.join(_ROOT_DIR, "Pages")
 CSV_FILE = "avito_listings.csv"
+RETRY_DELAY = 180          # задержка по умолчанию для непредвиденных ошибок
+MAX_RETRIES = 5            # максимальное число повторов
 DEFAULT_UA = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
     "AppleWebKit/537.36 (KHTML, like Gecko) "
@@ -86,6 +88,32 @@ def extract_number_int(text: str) -> str:
 # ═══════════════════════════════════════════════════════════════════
 
 
+def _handle_rate_limit(status_code: int, context: str) -> bool:
+    """
+    Проверяет, нужно ли ждать при данном HTTP-статусе.
+    Использует HTTP_RETRY_DELAYS из .env.
+    Если статус есть в словаре — выводит предупреждение, ждёт и возвращает True.
+    Иначе возвращает False.
+    """
+    delay = HTTP_RETRY_DELAYS.get(status_code)
+    if delay:
+        minutes = delay // 60
+        seconds = delay % 60
+        if minutes > 0:
+            wait_msg = f"{minutes} мин"
+            if seconds > 0:
+                wait_msg += f" {seconds} сек"
+        else:
+            wait_msg = f"{seconds} сек"
+        print(
+            f"[Avito] ⚠ HTTP {status_code} при загрузке {context}. "
+            f"Ожидание {wait_msg}..."
+        )
+        time.sleep(delay)
+        return True
+    return False
+
+
 def download_search_page(
     url: str,
     headers: Dict[str, str],
@@ -94,33 +122,51 @@ def download_search_page(
 ) -> str:
     """
     Загружает HTML страницы поиска и сохраняет в Pages/.
-    Возвращает HTML содержимое.
+    При HTTP 403/429 ждёт 3 минуты и пробует снова (до MAX_RETRIES раз).
+    Возвращает HTML содержимое или пустую строку при ошибке.
     """
     os.makedirs(PAGES_DIR, exist_ok=True)
 
-    try:
-        fetch_options: Dict[str, Any] = {
-            "headers": headers,
-            "timeout": 30,
-        }
-        if proxies:
-            fetch_options["proxies"] = proxies
+    for attempt in range(1, MAX_RETRIES + 1):
+        try:
+            fetch_options: Dict[str, Any] = {
+                "headers": headers,
+                "timeout": 30,
+            }
+            if proxies:
+                fetch_options["proxies"] = proxies
 
-        resp = spy_fetch(url, fetch_options)
-        html = resp.text
+            resp = spy_fetch(url, fetch_options)
 
-        # Сохраняем в Pages
-        filename = f"search_page_{page_num:04d}.html"
-        filepath = os.path.join(PAGES_DIR, filename)
-        with open(filepath, "w", encoding="utf-8") as f:
-            f.write(html)
+            # Проверка на лимиты
+            if _handle_rate_limit(resp.status_code, f"страницы поиска (стр. {page_num})"):
+                continue  # повторяем попытку
 
-        print(f"[Avito] Страница поиска сохранена: {filepath}")
-        return html
+            if not resp.ok:
+                print(f"[Avito] Ошибка загрузки страницы поиска: HTTP {resp.status_code}")
+                return ""
 
-    except Exception as err:
-        print(f"[Avito] Ошибка загрузки страницы поиска: {err}")
-        return ""
+            html = resp.text
+
+            # Сохраняем в Pages
+            filename = f"search_page_{page_num:04d}.html"
+            filepath = os.path.join(PAGES_DIR, filename)
+            with open(filepath, "w", encoding="utf-8") as f:
+                f.write(html)
+
+            print(f"[Avito] Страница поиска сохранена: {filepath}")
+            return html
+
+        except Exception as err:
+            print(f"[Avito] Ошибка загрузки страницы поиска (попытка {attempt}): {err}")
+            if attempt < MAX_RETRIES:
+                print(f"[Avito] Повтор через {RETRY_DELAY} сек...")
+                time.sleep(RETRY_DELAY)
+            else:
+                print("[Avito] Исчерпаны все попытки загрузки страницы поиска.")
+                return ""
+
+    return ""
 
 
 def extract_ad_links(html: str) -> List[str]:
@@ -286,36 +332,54 @@ def download_ad_page(
 ) -> Optional[str]:
     """
     Загружает HTML страницы объявления и сохраняет в Pages/.
-    Возвращает путь к сохранённому файлу.
+    При HTTP 403/429 ждёт 3 минуты и пробует снова (до MAX_RETRIES раз).
+    Возвращает путь к сохранённому файлу или None при ошибке.
     """
     os.makedirs(PAGES_DIR, exist_ok=True)
 
-    try:
-        fetch_options: Dict[str, Any] = {
-            "headers": headers,
-            "timeout": 30,
-        }
-        if proxies:
-            fetch_options["proxies"] = proxies
+    for attempt in range(1, MAX_RETRIES + 1):
+        try:
+            fetch_options: Dict[str, Any] = {
+                "headers": headers,
+                "timeout": 30,
+            }
+            if proxies:
+                fetch_options["proxies"] = proxies
 
-        resp = spy_fetch(url, fetch_options)
-        html = resp.text
+            resp = spy_fetch(url, fetch_options)
 
-        # Имя файла — item_id из URL
-        item_id_match = re.search(r"_([a-zA-Z0-9]+)$", url.rstrip("/"))
-        item_id = item_id_match.group(1) if item_id_match else f"ad_{int(time.time())}"
+            # Проверка на лимиты
+            if _handle_rate_limit(resp.status_code, f"объявления {url}"):
+                continue  # повторяем попытку
 
-        filename = f"ad_{item_id}.html"
-        filepath = os.path.join(PAGES_DIR, filename)
-        with open(filepath, "w", encoding="utf-8") as f:
-            f.write(html)
+            if not resp.ok:
+                print(f"    Ошибка загрузки объявления: HTTP {resp.status_code}")
+                return None
 
-        print(f"    Сохранено: {filepath}")
-        return filepath
+            html = resp.text
 
-    except Exception as err:
-        print(f"    Ошибка загрузки объявления: {err}")
-        return None
+            # Имя файла — item_id из URL
+            item_id_match = re.search(r"_([a-zA-Z0-9]+)$", url.rstrip("/"))
+            item_id = item_id_match.group(1) if item_id_match else f"ad_{int(time.time())}"
+
+            filename = f"ad_{item_id}.html"
+            filepath = os.path.join(PAGES_DIR, filename)
+            with open(filepath, "w", encoding="utf-8") as f:
+                f.write(html)
+
+            print(f"    Сохранено: {filepath}")
+            return filepath
+
+        except Exception as err:
+            print(f"    Ошибка загрузки объявления (попытка {attempt}): {err}")
+            if attempt < MAX_RETRIES:
+                print(f"    Повтор через {RETRY_DELAY} сек...")
+                time.sleep(RETRY_DELAY)
+            else:
+                print("    Исчерпаны все попытки загрузки объявления.")
+                return None
+
+    return None
 
 
 def parse_ad_page(filepath: str, ad_url: str) -> ListingRecord:

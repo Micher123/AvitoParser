@@ -33,3 +33,15 @@ if not _cookies_file:
     if os.path.isfile(_default_cookies):
         _cookies_file = _default_cookies
 AVITO_COOKIES_FILE = _cookies_file
+
+# ─── HTTP retry delays (в секундах) ──────────────────────
+HTTP_RETRY_DELAYS: dict[int, int] = {}
+for _status in (403, 429, 502, 504):
+    _val = os.getenv(f"HTTP_RETRY_{_status}", "")
+    if _val and _val.isdigit():
+        HTTP_RETRY_DELAYS[_status] = int(_val)
+# Значения по умолчанию, если не заданы в .env
+HTTP_RETRY_DELAYS.setdefault(403, 180)
+HTTP_RETRY_DELAYS.setdefault(429, 180)
+HTTP_RETRY_DELAYS.setdefault(502, 900)
+HTTP_RETRY_DELAYS.setdefault(504, 900)

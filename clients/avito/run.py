@@ -29,7 +29,7 @@ sys.path.insert(0, _PROJECT_ROOT)
 from bs4 import BeautifulSoup, Tag
 from dotenv import load_dotenv
 
-from core.env import AVITO_COOKIES_FILE, AVITO_COOKIE, AVITO_PROXY
+from core.env import AVITO_COOKIES_FILE, AVITO_COOKIE, AVITO_PROXY, HTTP_RETRY_DELAYS
 from utils.cookies_parser import (
     parse_cookies_file,
     merge_cookies,
@@ -52,6 +52,8 @@ AVITO_MAX_PAGES = int(os.getenv("AVITO_MAX_PAGES", "0") or "0")
 # ── Константы ──────────────────────────────────────────────────
 PAGES_DIR = os.path.join(_ENV_DIR, "Pages")
 SEND_BATCH_SIZE = 5  # отправлять на сервер пачками по N записей
+RETRY_DELAY = 180          # задержка по умолчанию для непредвиденных ошибок
+MAX_RETRIES = 5            # максимальное число повторов
 
 DEFAULT_UA = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
@@ -100,6 +102,32 @@ def prepare_headers() -> Dict[str, str]:
     return headers
 
 
+def _handle_rate_limit(status_code: int, context: str) -> bool:
+    """
+    Проверяет, нужно ли ждать при данном HTTP-статусе.
+    Использует HTTP_RETRY_DELAYS из .env.
+    Если статус есть в словаре — выводит предупреждение, ждёт и возвращает True.
+    Иначе возвращает False.
+    """
+    delay = HTTP_RETRY_DELAYS.get(status_code)
+    if delay:
+        minutes = delay // 60
+        seconds = delay % 60
+        if minutes > 0:
+            wait_msg = f"{minutes} мин"
+            if seconds > 0:
+                wait_msg += f" {seconds} сек"
+        else:
+            wait_msg = f"{seconds} сек"
+        print(
+            f"[Avito] ⚠ HTTP {status_code} при загрузке {context}. "
+            f"Ожидание {wait_msg}..."
+        )
+        time.sleep(delay)
+        return True
+    return False
+
+
 def prepare_proxies() -> Optional[Dict[str, str]]:
     if AVITO_PROXY:
         return {"http": AVITO_PROXY, "https": AVITO_PROXY}
@@ -107,24 +135,38 @@ def prepare_proxies() -> Optional[Dict[str, str]]:
 
 
 def download_search_page(url: str, headers: Dict[str, str], proxies: Optional[Dict[str, str]], page_num: int) -> Optional[str]:
-    """Скачивает поисковую страницу Avito."""
-    try:
-        fetch_options: Dict[str, Any] = {
-            "headers": headers,
-            "timeout": 30,
-        }
-        if proxies:
-            fetch_options["proxies"] = proxies
+    """Скачивает поисковую страницу Avito. При HTTP 403/429 ждёт 3 мин и повторяет (до MAX_RETRIES раз)."""
+    for attempt in range(1, MAX_RETRIES + 1):
+        try:
+            fetch_options: Dict[str, Any] = {
+                "headers": headers,
+                "timeout": 30,
+            }
+            if proxies:
+                fetch_options["proxies"] = proxies
 
-        resp = spy_fetch(url, fetch_options)
-        if not resp.ok:
-            print(f"[Avito] Ошибка загрузки страницы: HTTP {resp.status_code}")
-            return None
+            resp = spy_fetch(url, fetch_options)
 
-        return resp.text
-    except Exception as err:
-        print(f"[Avito] Ошибка загрузки страницы: {err}")
-        return None
+            # Проверка на лимиты
+            if _handle_rate_limit(resp.status_code, f"страницы поиска (стр. {page_num})"):
+                continue  # повторяем попытку
+
+            if not resp.ok:
+                print(f"[Avito] Ошибка загрузки страницы: HTTP {resp.status_code}")
+                return None
+
+            return resp.text
+
+        except Exception as err:
+            print(f"[Avito] Ошибка загрузки страницы (попытка {attempt}): {err}")
+            if attempt < MAX_RETRIES:
+                print(f"[Avito] Повтор через {RETRY_DELAY} сек...")
+                time.sleep(RETRY_DELAY)
+            else:
+                print("[Avito] Исчерпаны все попытки загрузки страницы поиска.")
+                return None
+
+    return None
 
 
 def extract_ad_links(html: str, search_url: str = "") -> List[str]:
@@ -182,31 +224,45 @@ def extract_ad_links(html: str, search_url: str = "") -> List[str]:
 
 
 def download_ad_page(ad_url: str, headers: Dict[str, str], proxies: Optional[Dict[str, str]]) -> Optional[str]:
-    """Скачивает страницу объявления."""
+    """Скачивает страницу объявления. При HTTP 403/429 ждёт 3 мин и повторяет (до MAX_RETRIES раз)."""
     os.makedirs(PAGES_DIR, exist_ok=True)
     filename = re.sub(r'[^\w\-_\.]', '_', ad_url.split("/")[-1] or "ad") + ".html"
     filepath = os.path.join(PAGES_DIR, filename)
 
-    try:
-        fetch_options: Dict[str, Any] = {
-            "headers": headers,
-            "timeout": 30,
-        }
-        if proxies:
-            fetch_options["proxies"] = proxies
+    for attempt in range(1, MAX_RETRIES + 1):
+        try:
+            fetch_options: Dict[str, Any] = {
+                "headers": headers,
+                "timeout": 30,
+            }
+            if proxies:
+                fetch_options["proxies"] = proxies
 
-        resp = spy_fetch(ad_url, fetch_options)
-        if not resp.ok:
-            print(f"  Ошибка загрузки объявления: HTTP {resp.status_code}")
-            return None
+            resp = spy_fetch(ad_url, fetch_options)
 
-        html = resp.text
-        with open(filepath, "w", encoding="utf-8") as f:
-            f.write(html)
-        return filepath
-    except Exception as err:
-        print(f"  Ошибка загрузки объявления: {err}")
-        return None
+            # Проверка на лимиты
+            if _handle_rate_limit(resp.status_code, f"объявления {ad_url}"):
+                continue  # повторяем попытку
+
+            if not resp.ok:
+                print(f"  Ошибка загрузки объявления: HTTP {resp.status_code}")
+                return None
+
+            html = resp.text
+            with open(filepath, "w", encoding="utf-8") as f:
+                f.write(html)
+            return filepath
+
+        except Exception as err:
+            print(f"  Ошибка загрузки объявления (попытка {attempt}): {err}")
+            if attempt < MAX_RETRIES:
+                print(f"    Повтор через {RETRY_DELAY} сек...")
+                time.sleep(RETRY_DELAY)
+            else:
+                print("    Исчерпаны все попытки загрузки объявления.")
+                return None
+
+    return None
 
 
 def extract_next_page_url(html: str, current_url: str) -> Optional[str]:
